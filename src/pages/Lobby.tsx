@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Copy, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +20,8 @@ const Lobby = () => {
   const [roomPlayers, setRoomPlayers] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
+  const [maxPlayers, setMaxPlayers] = useState(8);
+  const [maxRounds, setMaxRounds] = useState(5);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -116,6 +119,8 @@ const Lobby = () => {
         .insert({
           room_code: code,
           host_id: user.id,
+          max_players: maxPlayers,
+          max_rounds: maxRounds,
         })
         .select()
         .single();
@@ -391,13 +396,49 @@ const Lobby = () => {
               ) : (
                 <>
                   {!createdRoomCode ? (
-                    <Button 
-                      className="w-full" 
-                      size="lg"
-                      onClick={handleCreateRoom}
-                    >
-                      Create Room
-                    </Button>
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="maxPlayers">Number of Players</Label>
+                        <Select value={maxPlayers.toString()} onValueChange={(v) => setMaxPlayers(parseInt(v))}>
+                          <SelectTrigger id="maxPlayers">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="2">2 Players</SelectItem>
+                            <SelectItem value="3">3 Players</SelectItem>
+                            <SelectItem value="4">4 Players</SelectItem>
+                            <SelectItem value="5">5 Players</SelectItem>
+                            <SelectItem value="6">6 Players</SelectItem>
+                            <SelectItem value="7">7 Players</SelectItem>
+                            <SelectItem value="8">8 Players</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="maxRounds">Number of Rounds</Label>
+                        <Select value={maxRounds.toString()} onValueChange={(v) => setMaxRounds(parseInt(v))}>
+                          <SelectTrigger id="maxRounds">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">1 Round</SelectItem>
+                            <SelectItem value="2">2 Rounds</SelectItem>
+                            <SelectItem value="3">3 Rounds</SelectItem>
+                            <SelectItem value="4">4 Rounds</SelectItem>
+                            <SelectItem value="5">5 Rounds</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <Button 
+                        className="w-full" 
+                        size="lg"
+                        onClick={handleCreateRoom}
+                      >
+                        Create Room
+                      </Button>
+                    </>
                   ) : (
                     <div className="space-y-4">
                       <div className="bg-game-bg p-6 rounded-lg border-2 text-center">
