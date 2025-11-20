@@ -41,8 +41,8 @@ Provide ONLY this JSON:
 }
     `;
 
-    // Use v1beta API with latest flash model
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${KEY}`;
+    // Use v1beta API with gemini-2.5-flash (current stable model)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${KEY}`;
 
     const body = {
       contents: [
