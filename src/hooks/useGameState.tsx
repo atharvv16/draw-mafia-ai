@@ -18,6 +18,7 @@ interface GameState {
   currentTurn: number;
   startedAt: string;
   endedAt: string | null;
+  maxRounds: number;
 }
 
 export const useGameState = (roomCode: string) => {
@@ -67,6 +68,7 @@ export const useGameState = (roomCode: string) => {
             currentTurn: game.current_turn || 0,
             startedAt: game.started_at || new Date().toISOString(),
             endedAt: game.ended_at || null,
+            maxRounds: room.max_rounds || 5,
           });
         }
 
@@ -123,6 +125,7 @@ export const useGameState = (roomCode: string) => {
               currentTurn: game.current_turn || 0,
               startedAt: game.started_at || new Date().toISOString(),
               endedAt: game.ended_at || null,
+              maxRounds: gameState?.maxRounds || 5,
             });
             
             // Update player active states when turn changes
@@ -166,9 +169,9 @@ export const useGameState = (roomCode: string) => {
 
     console.log(`🔄 advanceTurn: ${gameState.currentRound},${gameState.currentTurn} → ${nextRound},${nextTurn}`);
 
-    // Don't advance beyond round 5
-    if (nextRound > 5) {
-      console.log("⛔ Prevented advancing beyond round 5");
+    // Don't advance beyond max rounds
+    if (nextRound > gameState.maxRounds) {
+      console.log(`⛔ Prevented advancing beyond round ${gameState.maxRounds}`);
       return;
     }
 

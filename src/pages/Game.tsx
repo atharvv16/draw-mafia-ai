@@ -40,9 +40,9 @@ const Game = () => {
     if (gameState?.endedAt) {
       setGameEnded(true);
     }
-    // If game somehow exceeded 5 rounds, force show voting
-    if (gameState && gameState.currentRound > 5 && !showVoting && !gameEnded) {
-      console.log("⚠️ Game exceeded 5 rounds, forcing voting phase...");
+    // If game somehow exceeded max rounds, force show voting
+    if (gameState && gameState.currentRound > gameState.maxRounds && !showVoting && !gameEnded) {
+      console.log(`⚠️ Game exceeded ${gameState.maxRounds} rounds, forcing voting phase...`);
       setShowVoting(true);
     }
   }, [gameState, showVoting, gameEnded]);
@@ -160,9 +160,10 @@ const Game = () => {
       
       console.log(`📊 Current: Round ${gameState.currentRound}, Turn ${gameState.currentTurn}`);
       console.log(`📊 Next would be: Round ${nextRound}, Turn ${nextTurn}`);
+      console.log(`📊 Max rounds: ${gameState.maxRounds}`);
       
-      // Check if we just completed round 5 (and game should end)
-      if (gameState.currentRound === 5 && nextTurn === 0) {
+      // Check if we just completed the final round (and game should end)
+      if (gameState.currentRound === gameState.maxRounds && nextTurn === 0) {
         // Game complete after this analysis, show voting
         console.log("🎮 Game complete! Showing voting phase...");
         setShowVoting(true);
@@ -180,12 +181,12 @@ const Game = () => {
             });
           }
         }, 2000);
-      } else if (nextRound <= 5) {
-        // Continue to next turn only if we haven't exceeded 5 rounds
+      } else if (nextRound <= gameState.maxRounds) {
+        // Continue to next turn only if we haven't exceeded max rounds
         console.log("➡️ Advancing to next turn...");
         await advanceTurn();
       } else {
-        console.log("⛔ Game should have ended but round exceeded 5");
+        console.log(`⛔ Game should have ended but round exceeded ${gameState.maxRounds}`);
       }
       
       setTurnTimeLeft(30);
@@ -324,7 +325,7 @@ const Game = () => {
               <span className="font-bold">{turnTimeLeft}s</span>
             </div>
             <div className="text-muted-foreground">
-              Round {gameState.currentRound}/5
+              Round {gameState.currentRound}/{gameState.maxRounds}
             </div>
           </div>
         </div>
