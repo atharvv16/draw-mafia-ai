@@ -90,7 +90,7 @@ serve(async (req) => {
 
     // Prepare request
     const MODEL = encodeURIComponent(GEMINI_MODEL);
-    const endpoint = `${GEMINI_API_BASE}/models/${MODEL}:generateContent`;
+    const endpoint = `${GEMINI_API_BASE}/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
     // Retry loop (exponential backoff)
     let lastError: Error | null = null;
@@ -118,7 +118,6 @@ serve(async (req) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${GEMINI_API_KEY}`,
           },
           body: JSON.stringify(requestBody),
         });
