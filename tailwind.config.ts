@@ -47,6 +47,15 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        game: {
+          canvas: "hsl(var(--game-canvas))",
+          bg: "hsl(var(--game-bg))",
+        },
+        suspicion: {
+          low: "hsl(var(--suspicion-low))",
+          med: "hsl(var(--suspicion-med))",
+          high: "hsl(var(--suspicion-high))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
