@@ -121,6 +121,12 @@ export const useGameState = (roomCode: string) => {
               currentTurn: game.current_turn || 0,
               startedAt: game.started_at || new Date().toISOString(),
             });
+            
+            // Update player active states when turn changes
+            setPlayers(prev => prev.map((p, index) => ({
+              ...p,
+              isActive: index === (game.current_turn || 0)
+            })));
           }
         }
       )

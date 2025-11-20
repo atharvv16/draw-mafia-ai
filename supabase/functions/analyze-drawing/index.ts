@@ -28,17 +28,30 @@ serve(async (req) => {
     const base64 = imageData.split(",")[1];
 
     const prompt = `
-You are analyzing a collaborative drawing game called Trouble Painter.
+You are analyzing a collaborative drawing game called Trouble Painter where players take turns drawing.
 
-Keyword: "${keyword}"
+CRITICAL RULES:
+1. One player is a "trouble painter" who doesn't know the keyword and tries to blend in
+2. DO NOT reveal the keyword "${keyword}" in your guesses unless the drawing CLEARLY shows it
+3. Make realistic guesses based ONLY on what's actually visible in the drawing
+4. Early in the game, drawings are incomplete - be vague and uncertain
+5. If the drawing is just lines or basic shapes, guess generic things like "abstract", "lines", "shape", "scribble"
+6. Your guesses should progress from vague to specific as drawings become more detailed
+
 Players: ${players.join(", ")}
 
-Provide ONLY this JSON:
+Analyze the drawing and provide ONLY this JSON (no markdown, no explanation):
 {
-  "hint": "...",
-  "topGuesses": ["g1","g2","g3"],
-  "suspicionScores": { "player": 0.1 }
+  "hint": "brief observation about what's visible (not the keyword)",
+  "topGuesses": ["guess1", "guess2", "guess3"],
+  "suspicionScores": { "PlayerName": 0.3 }
 }
+
+Suspicion scores (0.0 to 1.0):
+- 0.0-0.2: normal drawing behavior
+- 0.3-0.5: slightly suspicious (vague or odd strokes)
+- 0.6-0.8: very suspicious (inconsistent with keyword)
+- 0.9-1.0: likely the trouble painter
     `;
 
     // Use v1beta API with gemini-2.5-flash (current stable model)
