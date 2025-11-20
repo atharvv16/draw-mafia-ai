@@ -41,8 +41,8 @@ Provide ONLY this JSON:
 }
     `;
 
-    // 🌟 NEW v1 MODEL + ENDPOINT
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${KEY}`;
+    // Use v1beta API with correct model name
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${KEY}`;
 
     const body = {
       contents: [
@@ -97,6 +97,6 @@ Provide ONLY this JSON:
 
     return json(parsed);
   } catch (err) {
-    return json({ error: err.message }, 500);
+    return json({ error: err instanceof Error ? err.message : "Unknown error" }, 500);
   }
 });
