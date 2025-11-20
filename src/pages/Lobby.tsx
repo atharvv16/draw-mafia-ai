@@ -401,7 +401,7 @@ const Lobby = () => {
                         <Label htmlFor="maxPlayers">Number of Players</Label>
                         <Select value={maxPlayers.toString()} onValueChange={(v) => setMaxPlayers(parseInt(v))}>
                           <SelectTrigger id="maxPlayers">
-                            <SelectValue />
+                            <SelectValue placeholder="Select players" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="2">2 Players</SelectItem>
@@ -419,7 +419,7 @@ const Lobby = () => {
                         <Label htmlFor="maxRounds">Number of Rounds</Label>
                         <Select value={maxRounds.toString()} onValueChange={(v) => setMaxRounds(parseInt(v))}>
                           <SelectTrigger id="maxRounds">
-                            <SelectValue />
+                            <SelectValue placeholder="Select rounds" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="1">1 Round</SelectItem>
