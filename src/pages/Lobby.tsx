@@ -256,7 +256,30 @@ const Lobby = () => {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("AI test failed:", error);
+        const errorMessage = error.message || "Unknown error";
+        if (errorMessage.includes("503") || errorMessage.includes("unavailable") || errorMessage.includes("overloaded")) {
+          toast({
+            title: "AI Temporarily Unavailable",
+            description: "The AI service is busy. Please try again later.",
+            variant: "destructive",
+          });
+        } else if (errorMessage.includes("429") || errorMessage.includes("rate limit")) {
+          toast({
+            title: "Rate Limit Reached",
+            description: "Too many requests. Please wait before testing again.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "AI Test Failed",
+            description: error.message || "Could not connect to AI service",
+            variant: "destructive",
+          });
+        }
+        return;
+      }
 
       console.log("✅ AI Response:", data);
       toast({

@@ -137,7 +137,31 @@ const Game = () => {
 
       if (error) {
         console.error("❌ AI Error:", error);
-        throw error;
+        
+        // Handle specific error cases with user-friendly messages
+        const errorMessage = error.message || "Unknown error";
+        if (errorMessage.includes("503") || errorMessage.includes("unavailable") || errorMessage.includes("overloaded")) {
+          toast({
+            title: "AI Temporarily Unavailable",
+            description: "The AI analysis service is busy. Please try again in a moment.",
+            variant: "destructive",
+          });
+        } else if (errorMessage.includes("429") || errorMessage.includes("rate limit")) {
+          toast({
+            title: "Rate Limit Reached",
+            description: "Too many requests. Please wait a moment before trying again.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Analysis Failed",
+            description: "Unable to analyze the drawing. Please try again.",
+            variant: "destructive",
+          });
+        }
+        
+        setAnalyzingDrawing(false);
+        return;
       }
 
       console.log("✅ AI Analysis received:", data);
