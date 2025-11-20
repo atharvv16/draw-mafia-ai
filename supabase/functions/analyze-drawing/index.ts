@@ -28,19 +28,32 @@ serve(async (req) => {
     
     console.log("📸 Calling Gemini API for image analysis...");
 
-    // Call Google Gemini API with gemini-2.0-flash-exp (supports vision)
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              {
-                text: `You are analyzing a collaborative drawing game called "Trouble Painter". The actual keyword that players are trying to draw is: "${keyword}".
+    // Retry logic with exponential backoff
+    let lastError;
+    const maxRetries = 3;
+    const baseDelay = 2000; // 2 seconds
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          const delay = baseDelay * Math.pow(2, attempt - 1);
+          console.log(`⏳ Retry attempt ${attempt + 1} after ${delay}ms delay...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        // Call Google Gemini API with gemini-2.0-flash-exp (supports vision)
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  {
+                    text: `You are analyzing a collaborative drawing game called "Trouble Painter". The actual keyword that players are trying to draw is: "${keyword}".
 
 Players in this game: ${players.join(", ")}
 
@@ -59,68 +72,84 @@ Respond ONLY with valid JSON in this exact format:
     "${players[2]}": 0.7
   }
 }`
-              },
-              {
-                inline_data: {
-                  mime_type: "image/png",
-                  data: base64Data
-                }
+                  },
+                  {
+                    inline_data: {
+                      mime_type: "image/png",
+                      data: base64Data
+                    }
+                  }
+                ]
+              }],
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 1024,
               }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1024,
+            }),
           }
-        }),
-      }
-    );
+        );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ Gemini API Error:", response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
-          status: 429,
+        if (response.status === 429 && attempt < maxRetries - 1) {
+          lastError = new Error("Rate limit exceeded");
+          console.log(`⚠️ Rate limited, will retry...`);
+          continue;
+        }
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("❌ Gemini API Error:", response.status, errorText);
+          
+          if (response.status === 429) {
+            return new Response(JSON.stringify({ error: "Rate limit exceeded. Please wait and try again." }), {
+              status: 429,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          if (response.status === 402) {
+            return new Response(JSON.stringify({ error: "Payment required." }), {
+              status: 402,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log("📊 Raw Gemini response:", JSON.stringify(data, null, 2));
+        
+        const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        if (!textContent) {
+          throw new Error("No text content in Gemini response");
+        }
+
+        console.log("📝 Gemini text response:", textContent);
+
+        // Extract JSON from the response (it might be wrapped in markdown code blocks)
+        let jsonText = textContent.trim();
+        if (jsonText.startsWith('```json')) {
+          jsonText = jsonText.slice(7, -3).trim();
+        } else if (jsonText.startsWith('```')) {
+          jsonText = jsonText.slice(3, -3).trim();
+        }
+
+        const analysis = JSON.parse(jsonText);
+        
+        console.log("✅ Parsed analysis:", JSON.stringify(analysis, null, 2));
+
+        return new Response(JSON.stringify(analysis), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      } catch (error: any) {
+        lastError = error;
+        if (attempt === maxRetries - 1) {
+          throw error;
+        }
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Payment required." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
     }
 
-    const data = await response.json();
-    console.log("📊 Raw Gemini response:", JSON.stringify(data, null, 2));
-    
-    const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!textContent) {
-      throw new Error("No text content in Gemini response");
-    }
-
-    console.log("📝 Gemini text response:", textContent);
-
-    // Extract JSON from the response (it might be wrapped in markdown code blocks)
-    let jsonText = textContent.trim();
-    if (jsonText.startsWith('```json')) {
-      jsonText = jsonText.slice(7, -3).trim();
-    } else if (jsonText.startsWith('```')) {
-      jsonText = jsonText.slice(3, -3).trim();
-    }
-
-    const analysis = JSON.parse(jsonText);
-    
-    console.log("✅ Parsed analysis:", JSON.stringify(analysis, null, 2));
-
-    return new Response(JSON.stringify(analysis), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Fallback in case all retries failed
+    throw lastError || new Error("Failed to analyze drawing after multiple attempts");
   } catch (error: any) {
     console.error("Error analyzing drawing:", error);
     return new Response(JSON.stringify({ error: error.message }), {
