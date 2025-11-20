@@ -73,42 +73,72 @@ Suspicion scores (0.0 to 1.0):
       ],
     };
 
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    const data = await resp.json();
-
-    if (!resp.ok) {
-      return json(
-        { error: "Gemini error", details: data },
-        resp.status
-      );
-    }
-
-    const text =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      data?.candidates?.[0]?.content?.[0]?.text ||
-      "";
-
-    if (!text) return json({ error: "No text returned by model" });
-
-    let clean = text.trim();
-    if (clean.startsWith("```")) clean = clean.replace(/^```[a-z]*\n?/, "").replace(/```$/, "");
-
-    let parsed;
-    try {
-      parsed = JSON.parse(clean);
-    } catch (e) {
-      return json({
-        error: "Invalid JSON from AI",
-        raw: clean,
+    // Retry logic with exponential backoff for overloaded API
+    let lastError = null;
+    const maxRetries = 3;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`🔄 Attempt ${attempt}/${maxRetries}`);
+      
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
+
+      const data = await resp.json();
+
+      // Success case
+      if (resp.ok) {
+        const text =
+          data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+          data?.candidates?.[0]?.content?.[0]?.text ||
+          "";
+
+        if (!text) return json({ error: "No text returned by model" }, 500);
+
+        let clean = text.trim();
+        if (clean.startsWith("```")) clean = clean.replace(/^```[a-z]*\n?/, "").replace(/```$/, "");
+
+        let parsed;
+        try {
+          parsed = JSON.parse(clean);
+        } catch (e) {
+          return json({
+            error: "Invalid JSON from AI",
+            raw: clean,
+          }, 500);
+        }
+
+        return json(parsed);
+      }
+
+      // Handle specific error cases
+      lastError = data;
+      
+      // If 503 (overloaded), retry with exponential backoff
+      if (resp.status === 503 && attempt < maxRetries) {
+        const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        console.log(`⏳ API overloaded, waiting ${waitTime/1000}s before retry ${attempt + 1}`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+      
+      // For other errors, return immediately
+      if (resp.status !== 503) {
+        return json(
+          { error: "Gemini error", details: data },
+          resp.status
+        );
+      }
     }
 
-    return json(parsed);
+    // All retries failed
+    return json({
+      error: "Gemini API is temporarily overloaded. Please try again in a moment.",
+      details: lastError,
+    }, 503);
+
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : "Unknown error" }, 500);
   }
