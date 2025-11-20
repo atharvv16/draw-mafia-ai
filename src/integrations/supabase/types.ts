@@ -14,7 +14,246 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      games: {
+        Row: {
+          current_round: number | null
+          current_turn: number | null
+          ended_at: string | null
+          id: string
+          keyword: string
+          room_id: string | null
+          started_at: string | null
+          trouble_painter_id: string | null
+        }
+        Insert: {
+          current_round?: number | null
+          current_turn?: number | null
+          ended_at?: string | null
+          id?: string
+          keyword: string
+          room_id?: string | null
+          started_at?: string | null
+          trouble_painter_id?: string | null
+        }
+        Update: {
+          current_round?: number | null
+          current_turn?: number | null
+          ended_at?: string | null
+          id?: string
+          keyword?: string
+          room_id?: string | null
+          started_at?: string | null
+          trouble_painter_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "games_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_trouble_painter_id_fkey"
+            columns: ["trouble_painter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          id: string
+          username: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          id: string
+          username: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          id?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      room_players: {
+        Row: {
+          id: string
+          is_host: boolean | null
+          joined_at: string | null
+          player_id: string | null
+          room_id: string | null
+        }
+        Insert: {
+          id?: string
+          is_host?: boolean | null
+          joined_at?: string | null
+          player_id?: string | null
+          room_id?: string | null
+        }
+        Update: {
+          id?: string
+          is_host?: boolean | null
+          joined_at?: string | null
+          player_id?: string | null
+          room_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_players_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_players_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rooms: {
+        Row: {
+          created_at: string | null
+          host_id: string | null
+          id: string
+          max_players: number | null
+          max_rounds: number | null
+          room_code: string
+          status: string | null
+          turn_duration: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          host_id?: string | null
+          id?: string
+          max_players?: number | null
+          max_rounds?: number | null
+          room_code: string
+          status?: string | null
+          turn_duration?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          host_id?: string | null
+          id?: string
+          max_players?: number | null
+          max_rounds?: number | null
+          room_code?: string
+          status?: string | null
+          turn_duration?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rooms_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      strokes: {
+        Row: {
+          created_at: string | null
+          game_id: string | null
+          id: string
+          player_id: string | null
+          round: number
+          stroke_data: Json
+          turn: number
+        }
+        Insert: {
+          created_at?: string | null
+          game_id?: string | null
+          id?: string
+          player_id?: string | null
+          round: number
+          stroke_data: Json
+          turn: number
+        }
+        Update: {
+          created_at?: string | null
+          game_id?: string | null
+          id?: string
+          player_id?: string | null
+          round?: number
+          stroke_data?: Json
+          turn?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strokes_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "strokes_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      votes: {
+        Row: {
+          created_at: string | null
+          game_id: string | null
+          id: string
+          suspected_id: string | null
+          voter_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          game_id?: string | null
+          id?: string
+          suspected_id?: string | null
+          voter_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          game_id?: string | null
+          id?: string
+          suspected_id?: string | null
+          voter_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "votes_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "votes_suspected_id_fkey"
+            columns: ["suspected_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "votes_voter_id_fkey"
+            columns: ["voter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

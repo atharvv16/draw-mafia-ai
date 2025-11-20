@@ -4,7 +4,7 @@ import { Eye, EyeOff, Info } from "lucide-react";
 interface GameInfoProps {
   role: {
     isTroublePainter: boolean;
-    keyword: string;
+    keyword: string | null;
   };
   round: number;
   isMyTurn: boolean;
@@ -42,10 +42,16 @@ const GameInfo = ({ role, round, isMyTurn }: GameInfoProps) => {
               ? "You don't know the word! Try to blend in without being obvious."
               : "Draw the keyword without making it too easy for the imposter."}
           </p>
-          {!role.isTroublePainter && (
+          {!role.isTroublePainter && role.keyword && (
             <div className="bg-card p-3 rounded-lg border">
               <p className="text-xs text-muted-foreground mb-1">Secret Word</p>
               <p className="text-2xl font-bold tracking-wider">{role.keyword}</p>
+            </div>
+          )}
+          {role.isTroublePainter && (
+            <div className="bg-card p-3 rounded-lg border">
+              <p className="text-xs text-muted-foreground mb-1">Your Goal</p>
+              <p className="text-lg font-bold text-destructive">Don't Get Caught!</p>
             </div>
           )}
         </div>
