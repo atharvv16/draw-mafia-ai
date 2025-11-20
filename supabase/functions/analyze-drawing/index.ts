@@ -13,34 +13,39 @@ serve(async (req) => {
 
   try {
     const { imageData, keyword, players } = await req.json();
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
-    console.log("🔑 API Key present:", !!GEMINI_API_KEY);
+    console.log("🔑 API Key present:", !!LOVABLE_API_KEY);
     console.log("🎯 Keyword:", keyword);
     console.log("👥 Players:", players);
     
-    if (!GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY is not configured");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
     }
 
     // Extract base64 data from data URL
     const base64Data = imageData.split(',')[1];
     
-    console.log("📸 Calling Gemini API for image analysis...");
+    console.log("🤖 Calling Lovable AI (Gemini) for image analysis...");
 
-    // Call Google Gemini API with correct model name for v1beta
+    // Call Lovable AI Gateway with vision model
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
         method: "POST",
         headers: {
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          contents: [{
-            parts: [
-              {
-                text: `You are analyzing a collaborative drawing game called "Trouble Painter". The actual keyword that players are trying to draw is: "${keyword}".
+          model: "google/gemini-2.5-flash",
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `You are analyzing a collaborative drawing game called "Trouble Painter". The actual keyword that players are trying to draw is: "${keyword}".
 
 Players in this game: ${players.join(", ")}
 
@@ -59,26 +64,25 @@ Respond ONLY with valid JSON in this exact format:
     "${players[2]}": 0.7
   }
 }`
-              },
-              {
-                inline_data: {
-                  mime_type: "image/png",
-                  data: base64Data
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: imageData
+                  }
                 }
-              }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1024,
-          }
+              ]
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 1024
         }),
       }
     );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("❌ Gemini API Error:", response.status, errorText);
+      console.error("❌ Lovable AI Error:", response.status, errorText);
       
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
@@ -86,19 +90,25 @@ Respond ONLY with valid JSON in this exact format:
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: "Payment required. Please add credits to your Lovable AI workspace." }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(`Lovable AI error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    console.log("📊 Raw Gemini response:", JSON.stringify(data, null, 2));
+    console.log("📊 Raw AI response:", JSON.stringify(data, null, 2));
     
-    const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const textContent = data.choices?.[0]?.message?.content;
     
     if (!textContent) {
-      throw new Error("No text content in Gemini response");
+      throw new Error("No text content in AI response");
     }
 
-    console.log("📝 Gemini text response:", textContent);
+    console.log("📝 AI text response:", textContent);
 
     // Extract JSON from the response (it might be wrapped in markdown code blocks)
     let jsonText = textContent.trim();
