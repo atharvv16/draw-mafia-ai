@@ -66,6 +66,20 @@ serve(async (req) => {
       return jsonResponse(fallback);
     }
 
+    // Helper function to generate fallback when quota exceeded
+    const generateQuotaFallback = () => {
+      console.warn("Gemini API quota exceeded - returning fallback analysis");
+      return {
+        hint: keyword ? `Think about what defines a ${keyword}...` : "Consider the overall shape and details.",
+        topGuesses: keyword ? [keyword.toLowerCase(), "drawing", "sketch"] : ["drawing", "sketch", "art"],
+        suspicionScores: players.reduce((acc: any, p: string, i: number) => {
+          acc[p] = Math.random() * 0.3 + 0.1; // Random low suspicion
+          return acc;
+        }, {}),
+        note: "Quota exceeded - Please upgrade your Gemini API plan or wait for quota reset at https://ai.google.dev/gemini-api/docs/rate-limits",
+      };
+    };
+
     // Build prompt
     const promptText = [
       `You are analyzing a collaborative drawing game called "Trouble Painter".`,
@@ -108,10 +122,20 @@ serve(async (req) => {
         });
 
         if (resp.status === 429) {
+          const errorText = await resp.text();
+          console.error(`❌ Gemini API Error: 429 ${errorText}`);
           lastError = new Error("Rate limited by Gemini API (429)");
-          console.warn("Rate limited; will retry if attempts remain");
+          
+          // Check if it's a quota issue (not just rate limiting)
+          if (errorText.includes("quota") || errorText.includes("RESOURCE_EXHAUSTED")) {
+            console.warn("⚠️ Quota exceeded - providing fallback response");
+            return jsonResponse(generateQuotaFallback());
+          }
+          
+          console.warn("⚠️ Rate limited, will retry...");
           if (attempt === maxRetries - 1) {
-            return jsonResponse({ error: "Rate limit exceeded. Please try again later." }, 429);
+            // Final retry failed, return fallback instead of error
+            return jsonResponse(generateQuotaFallback());
           }
           continue; // retry
         }
