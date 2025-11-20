@@ -189,5 +189,6 @@ export const useGameState = (roomCode: string) => {
     loading,
     advanceTurn,
     saveStroke,
+    setPlayers,
   };
 };

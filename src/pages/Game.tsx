@@ -7,6 +7,7 @@ import DrawingCanvas from "@/components/game/DrawingCanvas";
 import PlayerList from "@/components/game/PlayerList";
 import AIAnalysis from "@/components/game/AIAnalysis";
 import GameInfo from "@/components/game/GameInfo";
+import VotingPhase from "@/components/game/VotingPhase";
 import { useGameState } from "@/hooks/useGameState";
 import { useDrawingSync } from "@/hooks/useDrawingSync";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,13 +19,15 @@ const Game = () => {
   const { toast } = useToast();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   
-  const { gameState, players, currentUserId, loading, advanceTurn, saveStroke } = useGameState(roomCode || "");
+  const { gameState, players, currentUserId, loading, advanceTurn, saveStroke, setPlayers } = useGameState(roomCode || "");
   const strokes = useDrawingSync(gameState?.id || null, gameState?.currentRound || 1);
   
   const [turnTimeLeft, setTurnTimeLeft] = useState(30);
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [analyzingDrawing, setAnalyzingDrawing] = useState(false);
   const [lastAnalysisTime, setLastAnalysisTime] = useState(0);
+  const [showVoting, setShowVoting] = useState(false);
+  const [hasVoted, setHasVoted] = useState(false);
 
   const isMyTurn = gameState && currentUserId && players[gameState.currentTurn]?.id === currentUserId;
   const isTroublePainter = gameState?.troublePainterId === currentUserId;
@@ -55,26 +58,32 @@ const Game = () => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Only clear and redraw if we're starting fresh (no previous strokes drawn)
+    // This prevents clearing during active drawing
+    const shouldRedraw = true; // We always want to show all strokes
+    
+    if (shouldRedraw) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    strokes.forEach((stroke) => {
-      const { points, color, width } = stroke.stroke_data;
-      if (points.length === 0) return;
+      strokes.forEach((stroke) => {
+        const { points, color, width } = stroke.stroke_data;
+        if (points.length === 0) return;
 
-      ctx.strokeStyle = color;
-      ctx.lineWidth = width;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
 
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      points.forEach((point) => {
-        ctx.lineTo(point.x, point.y);
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        points.forEach((point) => {
+          ctx.lineTo(point.x, point.y);
+        });
+        ctx.stroke();
       });
-      ctx.stroke();
-    });
+    }
   }, [strokes]);
 
   const handleStrokeComplete = async (strokeData: any) => {
@@ -123,7 +132,24 @@ const Game = () => {
 
       console.log("✅ AI Analysis received:", data);
       setAiAnalysis(data);
-      await advanceTurn();
+      
+      // Update suspicion scores for players
+      if (data.suspicionScores) {
+        setPlayers(prev => prev.map(player => ({
+          ...player,
+          suspicionScore: data.suspicionScores[player.name] || player.suspicionScore
+        })));
+      }
+      
+      // Check if round is complete (all players have drawn)
+      const nextTurn = (gameState.currentTurn + 1) % players.length;
+      if (nextTurn === 0) {
+        // Round complete, show voting
+        setShowVoting(true);
+      } else {
+        await advanceTurn();
+      }
+      
       setTurnTimeLeft(30);
 
       toast({
@@ -139,6 +165,45 @@ const Game = () => {
       });
     } finally {
       setAnalyzingDrawing(false);
+    }
+  };
+
+  const handleVote = async (suspectedId: string) => {
+    if (!gameState || !currentUserId) return;
+
+    try {
+      await supabase.from("votes").insert({
+        game_id: gameState.id,
+        voter_id: currentUserId,
+        suspected_id: suspectedId,
+      });
+
+      setHasVoted(true);
+
+      toast({
+        title: "Vote cast!",
+        description: "Waiting for other players...",
+      });
+
+      // Check if all players have voted, then advance to next round
+      const { data: votes } = await supabase
+        .from("votes")
+        .select("*")
+        .eq("game_id", gameState.id);
+
+      if (votes && votes.length === players.length) {
+        // All voted, advance to next round
+        setShowVoting(false);
+        setHasVoted(false);
+        await advanceTurn();
+      }
+    } catch (error: any) {
+      console.error("Error voting:", error);
+      toast({
+        title: "Error",
+        description: "Failed to cast vote",
+        variant: "destructive",
+      });
     }
   };
 
@@ -206,40 +271,49 @@ const Game = () => {
             <GameInfo role={roleInfo} round={gameState.currentRound} isMyTurn={!!isMyTurn} />
           </div>
 
-          {/* Center - Canvas */}
+          {/* Center - Canvas or Voting */}
           <div className="space-y-4">
-            <Card className="p-4 border-2">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-primary animate-pulse"></div>
-                  <span className="font-medium">
-                    {isMyTurn ? "Your turn!" : `${currentPlayer?.name || "..."}'s turn`}
-                  </span>
-                </div>
-                <Button size="sm" variant="outline">
-                  <Eye className="w-4 h-4 mr-2" />
-                  Replay
-                </Button>
-              </div>
-              
-              <DrawingCanvas 
-                disabled={!isMyTurn} 
-                onStrokeComplete={handleStrokeComplete}
-                ref={canvasRef}
+            {showVoting ? (
+              <VotingPhase
+                players={players}
+                currentUserId={currentUserId || ""}
+                onVote={handleVote}
+                hasVoted={hasVoted}
               />
-              
-              {isMyTurn && (
-                <div className="flex gap-2 mt-4">
-                  <Button 
-                    className="flex-1" 
-                    onClick={handleSubmitTurn}
-                    disabled={analyzingDrawing}
-                  >
-                    {analyzingDrawing ? "Analyzing..." : "Submit Turn"}
+            ) : (
+              <Card className="p-4 border-2">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-primary animate-pulse"></div>
+                    <span className="font-medium">
+                      {isMyTurn ? "Your turn!" : `${currentPlayer?.name || "..."}'s turn`}
+                    </span>
+                  </div>
+                  <Button size="sm" variant="outline">
+                    <Eye className="w-4 h-4 mr-2" />
+                    Replay
                   </Button>
                 </div>
-              )}
-            </Card>
+                
+                <DrawingCanvas 
+                  disabled={!isMyTurn} 
+                  onStrokeComplete={handleStrokeComplete}
+                  ref={canvasRef}
+                />
+                
+                {isMyTurn && (
+                  <div className="flex gap-2 mt-4">
+                    <Button 
+                      className="flex-1" 
+                      onClick={handleSubmitTurn}
+                      disabled={analyzingDrawing}
+                    >
+                      {analyzingDrawing ? "Analyzing..." : "Submit Turn"}
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            )}
           </div>
 
           {/* Right Sidebar - AI Analysis */}
