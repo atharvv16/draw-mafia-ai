@@ -28,9 +28,9 @@ serve(async (req) => {
     
     console.log("📸 Calling Gemini API for image analysis...");
 
-    // Call Google Gemini API directly using gemini-pro (stable model with good free tier)
+    // Call Google Gemini API directly using gemini-1.5-flash with v1beta API
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-pro-vision:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
