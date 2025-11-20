@@ -52,38 +52,34 @@ const Game = () => {
 
   // Redraw canvas when strokes change
   useEffect(() => {
-    if (!canvasRef.current || strokes.length === 0) return;
+    if (!canvasRef.current) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Only clear and redraw if we're starting fresh (no previous strokes drawn)
-    // This prevents clearing during active drawing
-    const shouldRedraw = true; // We always want to show all strokes
-    
-    if (shouldRedraw) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Clear and redraw all strokes
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      strokes.forEach((stroke) => {
-        const { points, color, width } = stroke.stroke_data;
-        if (points.length === 0) return;
+    // Draw all strokes
+    strokes.forEach((stroke) => {
+      const { points, color, width } = stroke.stroke_data;
+      if (points.length === 0) return;
 
-        ctx.strokeStyle = color;
-        ctx.lineWidth = width;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
 
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        points.forEach((point) => {
-          ctx.lineTo(point.x, point.y);
-        });
-        ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      points.forEach((point) => {
+        ctx.lineTo(point.x, point.y);
       });
-    }
+      ctx.stroke();
+    });
   }, [strokes]);
 
   const handleStrokeComplete = async (strokeData: any) => {
@@ -141,11 +137,25 @@ const Game = () => {
         })));
       }
       
-      // Check if round is complete (all players have drawn)
+      // Check if game is complete (5 rounds done)
       const nextTurn = (gameState.currentTurn + 1) % players.length;
-      if (nextTurn === 0) {
-        // Round complete, show voting
+      const isLastTurnOfRound5 = gameState.currentRound === 5 && nextTurn === 0;
+      
+      if (isLastTurnOfRound5) {
+        // Game complete, show voting
         setShowVoting(true);
+        // AI auto-votes for most suspicious player
+        setTimeout(async () => {
+          const sortedByScore = [...players].sort((a, b) => b.suspicionScore - a.suspicionScore);
+          const mostSuspicious = sortedByScore[0];
+          if (mostSuspicious) {
+            await supabase.from("votes").insert({
+              game_id: gameState.id,
+              voter_id: "00000000-0000-0000-0000-000000000000", // AI voter
+              suspected_id: mostSuspicious.id,
+            });
+          }
+        }, 2000);
       } else {
         await advanceTurn();
       }
@@ -185,17 +195,37 @@ const Game = () => {
         description: "Waiting for other players...",
       });
 
-      // Check if all players have voted, then advance to next round
+      // Check if all players have voted (including AI)
       const { data: votes } = await supabase
         .from("votes")
         .select("*")
         .eq("game_id", gameState.id);
 
-      if (votes && votes.length === players.length) {
-        // All voted, advance to next round
-        setShowVoting(false);
-        setHasVoted(false);
-        await advanceTurn();
+      // All players + 1 AI vote = game end
+      if (votes && votes.length >= players.length + 1) {
+        // Calculate who got most votes
+        const voteCounts: Record<string, number> = {};
+        votes.forEach(vote => {
+          if (vote.suspected_id) {
+            voteCounts[vote.suspected_id] = (voteCounts[vote.suspected_id] || 0) + 1;
+          }
+        });
+        
+        const winner = Object.entries(voteCounts).sort((a, b) => b[1] - a[1])[0];
+        const wasCorrect = winner?.[0] === gameState.troublePainterId;
+        
+        toast({
+          title: wasCorrect ? "Correct!" : "Wrong!",
+          description: wasCorrect 
+            ? "You found the Trouble Painter!" 
+            : "The Trouble Painter got away!",
+        });
+        
+        // Mark game as ended
+        await supabase
+          .from("games")
+          .update({ ended_at: new Date().toISOString() })
+          .eq("id", gameState.id);
       }
     } catch (error: any) {
       console.error("Error voting:", error);
