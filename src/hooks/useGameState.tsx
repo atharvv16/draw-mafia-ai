@@ -116,7 +116,7 @@ export const useGameState = (roomCode: string) => {
         (payload) => {
           if (payload.eventType === "UPDATE" && payload.new) {
             const game = payload.new;
-            setGameState({
+            setGameState((prev) => ({
               id: game.id,
               roomId: game.room_id,
               keyword: game.keyword,
@@ -125,8 +125,8 @@ export const useGameState = (roomCode: string) => {
               currentTurn: game.current_turn || 0,
               startedAt: game.started_at || new Date().toISOString(),
               endedAt: game.ended_at || null,
-              maxRounds: gameState?.maxRounds || 5,
-            });
+              maxRounds: prev?.maxRounds || 5,
+            }));
             
             // Update player active states when turn changes
             setPlayers(prev => prev.map((p, index) => ({
