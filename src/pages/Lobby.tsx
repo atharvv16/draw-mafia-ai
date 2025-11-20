@@ -18,6 +18,7 @@ const Lobby = () => {
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
   const [roomPlayers, setRoomPlayers] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
+  const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -29,6 +30,76 @@ const Lobby = () => {
     });
   }, [navigate]);
 
+  // Fetch and sync room players
+  useEffect(() => {
+    if (!currentRoomId) return;
+
+    const fetchPlayers = async () => {
+      console.log("👥 Fetching players for room:", currentRoomId);
+      const { data: players } = await supabase
+        .from("room_players")
+        .select("*, profiles(username)")
+        .eq("room_id", currentRoomId);
+
+      if (players) {
+        console.log("✅ Players loaded:", players);
+        setRoomPlayers(players);
+      }
+    };
+
+    fetchPlayers();
+
+    // Real-time updates for players joining/leaving
+    const playersChannel = supabase
+      .channel(`room-players-${currentRoomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "room_players",
+          filter: `room_id=eq.${currentRoomId}`,
+        },
+        (payload) => {
+          console.log("👥 Player change detected:", payload);
+          fetchPlayers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(playersChannel);
+    };
+  }, [currentRoomId]);
+
+  // Listen for game creation
+  useEffect(() => {
+    if (!createdRoomCode || !currentRoomId) return;
+
+    console.log("👂 Setting up game creation listener for room:", createdRoomCode);
+
+    const gamesChannel = supabase
+      .channel(`room-games-${currentRoomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "games",
+          filter: `room_id=eq.${currentRoomId}`,
+        },
+        (payload) => {
+          console.log("🎮 Game created, navigating to game page...", payload);
+          navigate(`/game/${createdRoomCode}`);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(gamesChannel);
+    };
+  }, [createdRoomCode, currentRoomId, navigate]);
+
   const generateRoomCode = () => {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
   };
@@ -38,6 +109,8 @@ const Lobby = () => {
     
     try {
       const code = generateRoomCode();
+      console.log("🎮 Creating room with code:", code);
+      
       const { data: room, error } = await supabase
         .from("rooms")
         .insert({
@@ -49,6 +122,8 @@ const Lobby = () => {
 
       if (error) throw error;
 
+      console.log("✅ Room created:", room);
+
       await supabase.from("room_players").insert({
         room_id: room.id,
         player_id: user.id,
@@ -56,11 +131,14 @@ const Lobby = () => {
       });
 
       setCreatedRoomCode(code);
+      setCurrentRoomId(room.id);
+      
       toast({
         title: "Room created!",
         description: "Share the code with your friends",
       });
     } catch (error: any) {
+      console.error("❌ Error creating room:", error);
       toast({
         title: "Error",
         description: error.message,
@@ -201,21 +279,56 @@ const Lobby = () => {
     }
 
     try {
-      const { data: room, error } = await supabase
+      console.log("🚪 Attempting to join room:", roomCode.toUpperCase());
+      
+      const { data: room, error: roomError } = await supabase
         .from("rooms")
         .select("*")
         .eq("room_code", roomCode.toUpperCase())
-        .single();
+        .maybeSingle();
 
-      if (error) throw new Error("Room not found");
+      if (roomError || !room) {
+        console.error("❌ Room not found:", roomError);
+        throw new Error("Room not found. Please check the code and try again.");
+      }
 
-      await supabase.from("room_players").insert({
-        room_id: room.id,
-        player_id: user.id,
+      console.log("✅ Room found:", room);
+
+      // Check if already joined
+      const { data: existingPlayer } = await supabase
+        .from("room_players")
+        .select("*")
+        .eq("room_id", room.id)
+        .eq("player_id", user.id)
+        .maybeSingle();
+
+      if (!existingPlayer) {
+        const { error: joinError } = await supabase.from("room_players").insert({
+          room_id: room.id,
+          player_id: user.id,
+          is_host: false,
+        });
+
+        if (joinError) {
+          console.error("❌ Error joining room:", joinError);
+          throw joinError;
+        }
+        console.log("✅ Successfully joined room");
+      } else {
+        console.log("ℹ️ Already in this room");
+      }
+
+      // Set room info to show waiting screen
+      setCreatedRoomCode(roomCode.toUpperCase());
+      setCurrentRoomId(room.id);
+      setRoomCode("");
+      
+      toast({
+        title: "Joined room!",
+        description: "Waiting for host to start the game...",
       });
-
-      navigate(`/game/${roomCode}`);
     } catch (error: any) {
+      console.error("❌ Join room error:", error);
       toast({
         title: "Error",
         description: error.message,
@@ -309,13 +422,17 @@ const Lobby = () => {
                           <span className="font-medium">Players ({roomPlayers.length}/8)</span>
                         </div>
                         <div className="space-y-2">
-                          <div className="bg-card p-2 rounded flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-primary"></div>
-                            <span>You</span>
-                            <span className="ml-auto text-xs bg-primary text-primary-foreground px-2 py-1 rounded">
-                              Host
-                            </span>
-                          </div>
+                          {roomPlayers.map((player, index) => (
+                            <div key={player.id} className="bg-card p-2 rounded flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-primary"></div>
+                              <span>{player.profiles?.username || `Player ${index + 1}`}</span>
+                              {player.is_host && (
+                                <span className="ml-auto text-xs bg-primary text-primary-foreground px-2 py-1 rounded">
+                                  Host
+                                </span>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       </div>
 
