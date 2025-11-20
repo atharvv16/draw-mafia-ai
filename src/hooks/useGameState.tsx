@@ -161,6 +161,11 @@ export const useGameState = (roomCode: string) => {
     const nextTurn = (gameState.currentTurn + 1) % players.length;
     const nextRound = nextTurn === 0 ? gameState.currentRound + 1 : gameState.currentRound;
 
+    // Don't advance beyond round 5
+    if (nextRound > 5) {
+      return;
+    }
+
     await supabase
       .from("games")
       .update({
