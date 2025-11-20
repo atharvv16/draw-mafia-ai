@@ -27,7 +27,7 @@ const Game = () => {
 
   const mockRole = {
     isTroublePainter: false,
-    keyword: "BUTTERFLY",
+    keyword: "BUTTERFLY" as string | null,
   };
 
   const mockAIAnalysis = {

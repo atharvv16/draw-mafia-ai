@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Copy, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const Lobby = () => {
   const [searchParams] = useSearchParams();
@@ -14,43 +15,92 @@ const Lobby = () => {
   const isJoining = searchParams.get("join") === "true";
   
   const [roomCode, setRoomCode] = useState("");
-  const [playerName, setPlayerName] = useState("");
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
+  const [roomPlayers, setRoomPlayers] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        navigate("/auth");
+      } else {
+        setUser(session.user);
+      }
+    });
+  }, [navigate]);
 
   const generateRoomCode = () => {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
   };
 
-  const handleCreateRoom = () => {
-    if (!playerName.trim()) {
+  const handleCreateRoom = async () => {
+    if (!user) return;
+    
+    try {
+      const code = generateRoomCode();
+      const { data: room, error } = await supabase
+        .from("rooms")
+        .insert({
+          room_code: code,
+          host_id: user.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await supabase.from("room_players").insert({
+        room_id: room.id,
+        player_id: user.id,
+        is_host: true,
+      });
+
+      setCreatedRoomCode(code);
       toast({
-        title: "Name required",
-        description: "Please enter your name to continue",
+        title: "Room created!",
+        description: "Share the code with your friends",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
         variant: "destructive",
       });
-      return;
     }
-    
-    const code = generateRoomCode();
-    setCreatedRoomCode(code);
-    toast({
-      title: "Room created!",
-      description: "Share the code with your friends",
-    });
   };
 
-  const handleJoinRoom = () => {
-    if (!playerName.trim() || !roomCode.trim()) {
+  const handleJoinRoom = async () => {
+    if (!user || !roomCode.trim()) {
       toast({
         title: "Missing information",
-        description: "Please enter your name and room code",
+        description: "Please enter room code",
         variant: "destructive",
       });
       return;
     }
-    
-    // Navigate to game room (will be implemented)
-    navigate(`/game/${roomCode}`);
+
+    try {
+      const { data: room, error } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("room_code", roomCode.toUpperCase())
+        .single();
+
+      if (error) throw new Error("Room not found");
+
+      await supabase.from("room_players").insert({
+        room_id: room.id,
+        player_id: user.id,
+      });
+
+      navigate(`/game/${roomCode}`);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleStartGame = () => {
@@ -88,17 +138,6 @@ const Lobby = () => {
             </h1>
 
             <div className="space-y-6">
-              {/* Player Name Input */}
-              <div className="space-y-2">
-                <Label htmlFor="playerName">Your Name</Label>
-                <Input
-                  id="playerName"
-                  placeholder="Enter your name"
-                  value={playerName}
-                  onChange={(e) => setPlayerName(e.target.value)}
-                  className="border-2"
-                />
-              </div>
 
               {isJoining ? (
                 <>
@@ -152,12 +191,12 @@ const Lobby = () => {
                       <div className="bg-muted p-4 rounded-lg">
                         <div className="flex items-center gap-2 mb-2">
                           <Users className="w-4 h-4" />
-                          <span className="font-medium">Players (1/8)</span>
+                          <span className="font-medium">Players ({roomPlayers.length}/8)</span>
                         </div>
                         <div className="space-y-2">
                           <div className="bg-card p-2 rounded flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-primary"></div>
-                            <span>{playerName}</span>
+                            <span>You</span>
                             <span className="ml-auto text-xs bg-primary text-primary-foreground px-2 py-1 rounded">
                               Host
                             </span>
