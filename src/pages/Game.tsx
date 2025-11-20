@@ -28,10 +28,19 @@ const Game = () => {
   const [lastAnalysisTime, setLastAnalysisTime] = useState(0);
   const [showVoting, setShowVoting] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
+  const [gameEnded, setGameEnded] = useState(false);
+  const [gameResult, setGameResult] = useState<{ winner: string; wasCorrect: boolean } | null>(null);
 
   const isMyTurn = gameState && currentUserId && players[gameState.currentTurn]?.id === currentUserId;
   const isTroublePainter = gameState?.troublePainterId === currentUserId;
   const currentPlayer = players[gameState?.currentTurn || 0];
+
+  // Check if game has already ended
+  useEffect(() => {
+    if (gameState?.endedAt) {
+      setGameEnded(true);
+    }
+  }, [gameState]);
 
   // Timer effect
   useEffect(() => {
@@ -129,34 +138,38 @@ const Game = () => {
       console.log("✅ AI Analysis received:", data);
       setAiAnalysis(data);
       
-      // Update suspicion scores for players
+      // Update suspicion scores for players (ensure they're in 0-1 range)
       if (data.suspicionScores) {
-        setPlayers(prev => prev.map(player => ({
-          ...player,
-          suspicionScore: data.suspicionScores[player.name] || player.suspicionScore
-        })));
+        setPlayers(prev => prev.map(player => {
+          const score = data.suspicionScores[player.name];
+          return {
+            ...player,
+            suspicionScore: score ? (score > 1 ? score / 100 : score) : player.suspicionScore
+          };
+        }));
       }
       
-      // Check if game is complete (5 rounds done)
-      const nextTurn = (gameState.currentTurn + 1) % players.length;
-      const isLastTurnOfRound5 = gameState.currentRound === 5 && nextTurn === 0;
-      
-      if (isLastTurnOfRound5) {
-        // Game complete, show voting
+      // Check if we're at the end of round 5
+      if (gameState.currentRound === 5 && (gameState.currentTurn + 1) % players.length === 0) {
+        // Game complete after this analysis, show voting
+        console.log("🎮 Game complete! Showing voting phase...");
         setShowVoting(true);
-        // AI auto-votes for most suspicious player
+        
+        // AI auto-votes for most suspicious player after 2 seconds
         setTimeout(async () => {
           const sortedByScore = [...players].sort((a, b) => b.suspicionScore - a.suspicionScore);
           const mostSuspicious = sortedByScore[0];
           if (mostSuspicious) {
+            console.log("🤖 AI voting for:", mostSuspicious.name);
             await supabase.from("votes").insert({
               game_id: gameState.id,
-              voter_id: "00000000-0000-0000-0000-000000000000", // AI voter
+              voter_id: "00000000-0000-0000-0000-000000000000",
               suspected_id: mostSuspicious.id,
             });
           }
         }, 2000);
       } else {
+        // Continue to next turn
         await advanceTurn();
       }
       
@@ -213,12 +226,20 @@ const Game = () => {
         
         const winner = Object.entries(voteCounts).sort((a, b) => b[1] - a[1])[0];
         const wasCorrect = winner?.[0] === gameState.troublePainterId;
+        const winnerPlayer = players.find(p => p.id === winner?.[0]);
+        
+        setGameResult({
+          winner: winnerPlayer?.name || "Unknown",
+          wasCorrect
+        });
+        setGameEnded(true);
         
         toast({
           title: wasCorrect ? "Correct!" : "Wrong!",
           description: wasCorrect 
             ? "You found the Trouble Painter!" 
             : "The Trouble Painter got away!",
+          duration: 5000,
         });
         
         // Mark game as ended
@@ -303,7 +324,33 @@ const Game = () => {
 
           {/* Center - Canvas or Voting */}
           <div className="space-y-4">
-            {showVoting ? (
+            {gameEnded && gameResult ? (
+              <Card className="p-8 border-2 text-center space-y-6">
+                <div className="space-y-2">
+                  <h2 className="text-3xl font-bold">
+                    {gameResult.wasCorrect ? "🎉 Victory!" : "😈 Defeat!"}
+                  </h2>
+                  <p className="text-lg text-muted-foreground">
+                    {gameResult.wasCorrect 
+                      ? `The Trouble Painter was ${gameResult.winner}!`
+                      : `${gameResult.winner} was suspected, but they weren't the Trouble Painter!`
+                    }
+                  </p>
+                </div>
+                <div className="pt-4">
+                  <h3 className="text-sm font-medium text-muted-foreground mb-3">Final Suspicion Scores</h3>
+                  <div className="space-y-2">
+                    {players.sort((a, b) => b.suspicionScore - a.suspicionScore).map((player) => (
+                      <div key={player.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                        <span className="font-medium">{player.name}</span>
+                        <span className="text-sm">{Math.round(player.suspicionScore * 100)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <Button onClick={() => navigate("/")}>Return to Lobby</Button>
+              </Card>
+            ) : showVoting ? (
               <VotingPhase
                 players={players}
                 currentUserId={currentUserId || ""}

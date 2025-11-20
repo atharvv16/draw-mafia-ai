@@ -17,6 +17,7 @@ interface GameState {
   currentRound: number;
   currentTurn: number;
   startedAt: string;
+  endedAt: string | null;
 }
 
 export const useGameState = (roomCode: string) => {
@@ -65,6 +66,7 @@ export const useGameState = (roomCode: string) => {
             currentRound: game.current_round || 1,
             currentTurn: game.current_turn || 0,
             startedAt: game.started_at || new Date().toISOString(),
+            endedAt: game.ended_at || null,
           });
         }
 
@@ -120,6 +122,7 @@ export const useGameState = (roomCode: string) => {
               currentRound: game.current_round || 1,
               currentTurn: game.current_turn || 0,
               startedAt: game.started_at || new Date().toISOString(),
+              endedAt: game.ended_at || null,
             });
             
             // Update player active states when turn changes
