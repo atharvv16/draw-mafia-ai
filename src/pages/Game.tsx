@@ -224,14 +224,14 @@ const Game = () => {
         description: "Waiting for other players...",
       });
 
-      // Check if all players have voted (including AI)
+      // Check if all players have voted
       const { data: votes } = await supabase
         .from("votes")
         .select("*")
         .eq("game_id", gameState.id);
 
-      // All players + 1 AI vote = game end
-      if (votes && votes.length >= players.length + 1) {
+      // All players voted = game end
+      if (votes && votes.length >= players.length) {
         // Calculate who got most votes
         const voteCounts: Record<string, number> = {};
         votes.forEach(vote => {
