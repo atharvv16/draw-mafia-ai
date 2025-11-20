@@ -86,9 +86,14 @@ const Game = () => {
     setAnalyzingDrawing(true);
     
     try {
+      console.log("🎨 Submitting turn for AI analysis...");
+      console.log("🎯 Current keyword:", gameState.keyword);
+      
       const imageData = canvasRef.current.toDataURL("image/png");
       const playerNames = players.map(p => p.name);
+      console.log("👥 Players:", playerNames);
 
+      console.log("🤖 Calling Lovable AI (Gemini)...");
       const { data, error } = await supabase.functions.invoke("analyze-drawing", {
         body: {
           imageData,
@@ -97,8 +102,12 @@ const Game = () => {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("❌ AI Error:", error);
+        throw error;
+      }
 
+      console.log("✅ AI Analysis received:", data);
       setAiAnalysis(data);
       await advanceTurn();
       setTurnTimeLeft(30);
@@ -108,7 +117,7 @@ const Game = () => {
         description: "AI analysis complete",
       });
     } catch (error: any) {
-      console.error("Error analyzing drawing:", error);
+      console.error("❌ Error analyzing drawing:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to analyze drawing",

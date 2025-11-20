@@ -73,6 +73,8 @@ const Lobby = () => {
     if (!createdRoomCode || !user) return;
 
     try {
+      console.log("🎮 Starting game...");
+      
       // Get room
       const { data: room } = await supabase
         .from("rooms")
@@ -81,6 +83,7 @@ const Lobby = () => {
         .single();
 
       if (!room) throw new Error("Room not found");
+      console.log("✅ Room found:", room.room_code);
 
       // Get all players
       const { data: roomPlayers } = await supabase
@@ -96,17 +99,20 @@ const Lobby = () => {
         });
         return;
       }
+      console.log("👥 Players:", roomPlayers.length);
 
       // Select random trouble painter
       const troublePainterIndex = Math.floor(Math.random() * roomPlayers.length);
       const troublePainterId = roomPlayers[troublePainterIndex].player_id;
+      console.log("🎭 Random Trouble Painter selected:", troublePainterId);
 
       // Import dynamically to avoid circular dependency
       const { getRandomWord } = await import("@/constants/gameWords");
       const keyword = getRandomWord();
+      console.log("🎯 Random word generated:", keyword);
 
       // Create game
-      await supabase.from("games").insert({
+      const { error: gameError } = await supabase.from("games").insert({
         room_id: room.id,
         keyword,
         trouble_painter_id: troublePainterId,
@@ -114,16 +120,70 @@ const Lobby = () => {
         current_turn: 0,
       });
 
+      if (gameError) throw gameError;
+      console.log("✅ Game created successfully");
+
       // Update room status
       await supabase
         .from("rooms")
         .update({ status: "in_progress" })
         .eq("id", room.id);
 
+      toast({
+        title: "Game started!",
+        description: `Keyword: ${keyword}`,
+      });
+
       navigate(`/game/${createdRoomCode}`);
     } catch (error: any) {
+      console.error("❌ Error starting game:", error);
       toast({
         title: "Error starting game",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const testAI = async () => {
+    try {
+      console.log("🤖 Testing AI integration...");
+      toast({
+        title: "Testing AI...",
+        description: "Sending test request to Lovable AI (Gemini)",
+      });
+
+      const testCanvas = document.createElement("canvas");
+      testCanvas.width = 400;
+      testCanvas.height = 400;
+      const ctx = testCanvas.getContext("2d")!;
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, 400, 400);
+      ctx.fillStyle = "black";
+      ctx.font = "30px Arial";
+      ctx.fillText("Test Drawing", 100, 200);
+
+      const imageData = testCanvas.toDataURL("image/png");
+
+      const { data, error } = await supabase.functions.invoke("analyze-drawing", {
+        body: {
+          imageData,
+          keyword: "Butterfly",
+          players: ["Player1", "Player2", "Player3"],
+        },
+      });
+
+      if (error) throw error;
+
+      console.log("✅ AI Response:", data);
+      toast({
+        title: "AI Test Successful! 🎉",
+        description: `Hint: ${data.hint}`,
+      });
+    } catch (error: any) {
+      console.error("❌ AI Test failed:", error);
+      toast({
+        title: "AI Test Failed",
         description: error.message,
         variant: "destructive",
       });
@@ -259,13 +319,22 @@ const Lobby = () => {
                         </div>
                       </div>
 
-                      <Button 
-                        className="w-full" 
-                        size="lg"
-                        onClick={handleStartGame}
-                      >
-                        Start Game
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button 
+                          className="flex-1" 
+                          size="lg"
+                          onClick={handleStartGame}
+                        >
+                          Start Game
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          size="lg"
+                          onClick={testAI}
+                        >
+                          Test AI
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </>
