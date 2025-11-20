@@ -69,6 +69,67 @@ const Lobby = () => {
     }
   };
 
+  const handleStartGame = async () => {
+    if (!createdRoomCode || !user) return;
+
+    try {
+      // Get room
+      const { data: room } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("room_code", createdRoomCode)
+        .single();
+
+      if (!room) throw new Error("Room not found");
+
+      // Get all players
+      const { data: roomPlayers } = await supabase
+        .from("room_players")
+        .select("player_id")
+        .eq("room_id", room.id);
+
+      if (!roomPlayers || roomPlayers.length < 2) {
+        toast({
+          title: "Not enough players",
+          description: "You need at least 2 players to start",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Select random trouble painter
+      const troublePainterIndex = Math.floor(Math.random() * roomPlayers.length);
+      const troublePainterId = roomPlayers[troublePainterIndex].player_id;
+
+      // Import dynamically to avoid circular dependency
+      const { getRandomWord } = await import("@/constants/gameWords");
+      const keyword = getRandomWord();
+
+      // Create game
+      await supabase.from("games").insert({
+        room_id: room.id,
+        keyword,
+        trouble_painter_id: troublePainterId,
+        current_round: 1,
+        current_turn: 0,
+      });
+
+      // Update room status
+      await supabase
+        .from("rooms")
+        .update({ status: "in_progress" })
+        .eq("id", room.id);
+
+      navigate(`/game/${createdRoomCode}`);
+    } catch (error: any) {
+      toast({
+        title: "Error starting game",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleJoinRoom = async () => {
     if (!user || !roomCode.trim()) {
       toast({
@@ -100,12 +161,6 @@ const Lobby = () => {
         description: error.message,
         variant: "destructive",
       });
-    }
-  };
-
-  const handleStartGame = () => {
-    if (createdRoomCode) {
-      navigate(`/game/${createdRoomCode}`);
     }
   };
 

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Minus, Plus } from "lucide-react";
@@ -13,8 +13,11 @@ const COLORS = [
   "#3B82F6", "#8B5CF6", "#EC4899", "#6366F1", "#14B8A6"
 ];
 
-const DrawingCanvas = ({ disabled = false, onStrokeComplete }: DrawingCanvasProps) => {
+const DrawingCanvas = forwardRef<HTMLCanvasElement, DrawingCanvasProps>(
+  ({ disabled = false, onStrokeComplete }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  useImperativeHandle(ref, () => canvasRef.current!);
   const [isDrawing, setIsDrawing] = useState(false);
   const [context, setContext] = useState<CanvasRenderingContext2D | null>(null);
   const [currentColor, setCurrentColor] = useState("#000000");
@@ -163,6 +166,8 @@ const DrawingCanvas = ({ disabled = false, onStrokeComplete }: DrawingCanvasProp
       </Card>
     </div>
   );
-};
+});
+
+DrawingCanvas.displayName = "DrawingCanvas";
 
 export default DrawingCanvas;
