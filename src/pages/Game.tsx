@@ -24,6 +24,7 @@ const Game = () => {
   const [turnTimeLeft, setTurnTimeLeft] = useState(30);
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [analyzingDrawing, setAnalyzingDrawing] = useState(false);
+  const [lastAnalysisTime, setLastAnalysisTime] = useState(0);
 
   const isMyTurn = gameState && currentUserId && players[gameState.currentTurn]?.id === currentUserId;
   const isTroublePainter = gameState?.troublePainterId === currentUserId;
@@ -83,7 +84,20 @@ const Game = () => {
   const handleSubmitTurn = async () => {
     if (!gameState || !canvasRef.current) return;
 
+    // Rate limiting: prevent requests within 5 seconds of last request
+    const now = Date.now();
+    const timeSinceLastAnalysis = now - lastAnalysisTime;
+    if (timeSinceLastAnalysis < 5000) {
+      toast({
+        title: "Please wait",
+        description: `Wait ${Math.ceil((5000 - timeSinceLastAnalysis) / 1000)} seconds before analyzing again`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setAnalyzingDrawing(true);
+    setLastAnalysisTime(now);
     
     try {
       console.log("🎨 Submitting turn for AI analysis...");
