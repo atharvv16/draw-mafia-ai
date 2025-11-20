@@ -23,6 +23,7 @@ const DrawingCanvas = forwardRef<HTMLCanvasElement, DrawingCanvasProps>(
   const [currentColor, setCurrentColor] = useState("#000000");
   const [brushSize, setBrushSize] = useState(3);
   const [currentStroke, setCurrentStroke] = useState<any[]>([]);
+  const [hasDrawnStroke, setHasDrawnStroke] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -55,8 +56,15 @@ const DrawingCanvas = forwardRef<HTMLCanvasElement, DrawingCanvasProps>(
     }
   }, [currentColor, brushSize, context]);
 
+  // Reset stroke count when it becomes your turn
+  useEffect(() => {
+    if (!disabled) {
+      setHasDrawnStroke(false);
+    }
+  }, [disabled]);
+
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (disabled || !context) return;
+    if (disabled || !context || hasDrawnStroke) return;
     
     setIsDrawing(true);
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -71,7 +79,7 @@ const DrawingCanvas = forwardRef<HTMLCanvasElement, DrawingCanvasProps>(
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || disabled || !context) return;
+    if (!isDrawing || disabled || !context || hasDrawnStroke) return;
 
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -92,6 +100,7 @@ const DrawingCanvas = forwardRef<HTMLCanvasElement, DrawingCanvasProps>(
         width: brushSize,
       };
       onStrokeComplete?.(strokeData);
+      setHasDrawnStroke(true);
     }
     setIsDrawing(false);
     setCurrentStroke([]);
@@ -150,16 +159,17 @@ const DrawingCanvas = forwardRef<HTMLCanvasElement, DrawingCanvasProps>(
       <Card className="relative overflow-hidden bg-game-canvas border-2" style={{ aspectRatio: "4/3" }}>
         <canvas
           ref={canvasRef}
-          className={`w-full h-full ${disabled ? "cursor-not-allowed opacity-75" : "cursor-crosshair"}`}
+          className={`w-full h-full ${disabled || hasDrawnStroke ? "cursor-not-allowed opacity-75" : "cursor-crosshair"}`}
+          style={{ cursor: disabled || hasDrawnStroke ? "not-allowed" : "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><circle cx=\"12\" cy=\"12\" r=\"8\" fill=\"%23000\" stroke=\"%23fff\" stroke-width=\"2\"/></svg>') 12 12, crosshair" }}
           onMouseDown={startDrawing}
           onMouseMove={draw}
           onMouseUp={stopDrawing}
           onMouseLeave={stopDrawing}
         />
-        {disabled && (
+        {(disabled || hasDrawnStroke) && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/10 backdrop-blur-[1px]">
             <p className="text-lg font-medium text-muted-foreground">
-              Wait for your turn...
+              {hasDrawnStroke ? "Stroke drawn! Submit your turn." : "Wait for your turn..."}
             </p>
           </div>
         )}
