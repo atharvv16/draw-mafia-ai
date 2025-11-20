@@ -164,18 +164,27 @@ export const useGameState = (roomCode: string) => {
     const nextTurn = (gameState.currentTurn + 1) % players.length;
     const nextRound = nextTurn === 0 ? gameState.currentRound + 1 : gameState.currentRound;
 
+    console.log(`🔄 advanceTurn: ${gameState.currentRound},${gameState.currentTurn} → ${nextRound},${nextTurn}`);
+
     // Don't advance beyond round 5
     if (nextRound > 5) {
+      console.log("⛔ Prevented advancing beyond round 5");
       return;
     }
 
-    await supabase
+    const { error } = await supabase
       .from("games")
       .update({
         current_turn: nextTurn,
         current_round: nextRound,
       })
       .eq("id", gameState.id);
+
+    if (error) {
+      console.error("❌ Error advancing turn:", error);
+    } else {
+      console.log("✅ Turn advanced successfully");
+    }
   };
 
   const saveStroke = async (strokeData: any) => {

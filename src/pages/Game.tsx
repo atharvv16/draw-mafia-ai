@@ -35,12 +35,17 @@ const Game = () => {
   const isTroublePainter = gameState?.troublePainterId === currentUserId;
   const currentPlayer = players[gameState?.currentTurn || 0];
 
-  // Check if game has already ended
+  // Check if game has already ended or exceeded rounds
   useEffect(() => {
     if (gameState?.endedAt) {
       setGameEnded(true);
     }
-  }, [gameState]);
+    // If game somehow exceeded 5 rounds, force show voting
+    if (gameState && gameState.currentRound > 5 && !showVoting && !gameEnded) {
+      console.log("⚠️ Game exceeded 5 rounds, forcing voting phase...");
+      setShowVoting(true);
+    }
+  }, [gameState, showVoting, gameEnded]);
 
   // Timer effect
   useEffect(() => {
@@ -149,8 +154,15 @@ const Game = () => {
         }));
       }
       
-      // Check if we're at the end of round 5
-      if (gameState.currentRound === 5 && (gameState.currentTurn + 1) % players.length === 0) {
+      // Calculate what the next turn/round would be
+      const nextTurn = (gameState.currentTurn + 1) % players.length;
+      const nextRound = nextTurn === 0 ? gameState.currentRound + 1 : gameState.currentRound;
+      
+      console.log(`📊 Current: Round ${gameState.currentRound}, Turn ${gameState.currentTurn}`);
+      console.log(`📊 Next would be: Round ${nextRound}, Turn ${nextTurn}`);
+      
+      // Check if we just completed round 5 (and game should end)
+      if (gameState.currentRound === 5 && nextTurn === 0) {
         // Game complete after this analysis, show voting
         console.log("🎮 Game complete! Showing voting phase...");
         setShowVoting(true);
@@ -168,9 +180,12 @@ const Game = () => {
             });
           }
         }, 2000);
-      } else {
-        // Continue to next turn
+      } else if (nextRound <= 5) {
+        // Continue to next turn only if we haven't exceeded 5 rounds
+        console.log("➡️ Advancing to next turn...");
         await advanceTurn();
+      } else {
+        console.log("⛔ Game should have ended but round exceeded 5");
       }
       
       setTurnTimeLeft(30);
