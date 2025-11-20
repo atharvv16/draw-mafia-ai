@@ -25,7 +25,6 @@ export const useDrawingSync = (gameId: string | null, currentRound: number) => {
         .from("strokes")
         .select("*")
         .eq("game_id", gameId)
-        .eq("round", currentRound)
         .order("created_at", { ascending: true });
 
       if (data) {
@@ -50,12 +49,10 @@ export const useDrawingSync = (gameId: string | null, currentRound: number) => {
         },
         (payload) => {
           const newStroke = payload.new;
-          if (newStroke.round === currentRound) {
-            setStrokes((prev) => [...prev, {
-              ...newStroke,
-              stroke_data: newStroke.stroke_data as { points: { x: number; y: number }[]; color: string; width: number; }
-            } as Stroke]);
-          }
+          setStrokes((prev) => [...prev, {
+            ...newStroke,
+            stroke_data: newStroke.stroke_data as { points: { x: number; y: number }[]; color: string; width: number; }
+          } as Stroke]);
         }
       )
       .subscribe();
