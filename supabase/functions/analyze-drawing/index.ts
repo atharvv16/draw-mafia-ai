@@ -22,8 +22,8 @@ serve(async (req) => {
     if (!imageData) return json({ error: "Missing imageData" }, 400);
     if (!players || !players.length) return json({ error: "Missing players" }, 400);
 
-    const KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!KEY) return json({ error: "Missing GEMINI_API_KEY" }, 500);
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) return json({ error: "Missing LOVABLE_API_KEY" }, 500);
 
     const base64 = imageData.split(",")[1];
 
@@ -54,18 +54,17 @@ Suspicion scores (0.0 to 1.0):
 - 0.9-1.0: likely the trouble painter
     `;
 
-    // Use v1beta API with gemini-2.5-flash (current stable model)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${KEY}`;
-
     const body = {
-      contents: [
+      model: "google/gemini-2.5-flash",
+      messages: [
         {
-          parts: [
-            { text: prompt },
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
             {
-              inline_data: {
-                mime_type: "image/png",
-                data: base64,
+              type: "image_url",
+              image_url: {
+                url: `data:image/png;base64,${base64}`,
               },
             },
           ],
@@ -73,16 +72,19 @@ Suspicion scores (0.0 to 1.0):
       ],
     };
 
-    // Retry logic with exponential backoff for overloaded API
+    // Retry logic with exponential backoff
     let lastError = null;
     const maxRetries = 3;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       console.log(`🔄 Attempt ${attempt}/${maxRetries}`);
       
-      const resp = await fetch(url, {
+      const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(body),
       });
 
@@ -90,10 +92,7 @@ Suspicion scores (0.0 to 1.0):
 
       // Success case
       if (resp.ok) {
-        const text =
-          data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-          data?.candidates?.[0]?.content?.[0]?.text ||
-          "";
+        const text = data?.choices?.[0]?.message?.content || "";
 
         if (!text) return json({ error: "No text returned by model" }, 500);
 
@@ -116,6 +115,21 @@ Suspicion scores (0.0 to 1.0):
       // Handle specific error cases
       lastError = data;
       
+      // Handle rate limits (429) and payment required (402)
+      if (resp.status === 429) {
+        return json({
+          error: "Rate limit exceeded. Please try again in a moment.",
+          details: data,
+        }, 429);
+      }
+      
+      if (resp.status === 402) {
+        return json({
+          error: "AI service requires payment. Please contact support.",
+          details: data,
+        }, 402);
+      }
+      
       // If 503 (overloaded), retry with exponential backoff
       if (resp.status === 503 && attempt < maxRetries) {
         const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
@@ -127,7 +141,7 @@ Suspicion scores (0.0 to 1.0):
       // For other errors, return immediately
       if (resp.status !== 503) {
         return json(
-          { error: "Gemini error", details: data },
+          { error: "AI service error", details: data },
           resp.status
         );
       }
@@ -135,11 +149,12 @@ Suspicion scores (0.0 to 1.0):
 
     // All retries failed
     return json({
-      error: "Gemini API is temporarily overloaded. Please try again in a moment.",
+      error: "AI service is temporarily unavailable. Please try again in a moment.",
       details: lastError,
     }, 503);
 
   } catch (err) {
+    console.error("Edge function error:", err);
     return json({ error: err instanceof Error ? err.message : "Unknown error" }, 500);
   }
 });
