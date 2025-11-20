@@ -90,7 +90,7 @@ serve(async (req) => {
 
     // Prepare request
     const MODEL = encodeURIComponent(GEMINI_MODEL);
-    const endpoint = `${GEMINI_API_BASE}/models/${MODEL}:generate`;
+    const endpoint = `${GEMINI_API_BASE}/models/${MODEL}:generateContent`;
 
     // Retry loop (exponential backoff)
     let lastError: Error | null = null;
@@ -104,11 +104,13 @@ serve(async (req) => {
         }
 
         const requestBody = {
-          // safe shape: contents with text instruction + inline_data for image
-          contents: [
-            { parts: [{ text: promptText }] },
-            { parts: [{ inline_data: { mime_type: "image/png", data: base64Data } }] },
-          ],
+          // Correct structure: single content object with multiple parts
+          contents: [{
+            parts: [
+              { text: promptText },
+              { inline_data: { mime_type: "image/png", data: base64Data } }
+            ]
+          }],
           generationConfig: { temperature: 0.6, maxOutputTokens: 512 },
         };
 
