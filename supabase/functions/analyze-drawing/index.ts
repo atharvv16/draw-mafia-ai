@@ -13,99 +13,104 @@ serve(async (req) => {
 
   try {
     const { imageData, keyword, players } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    console.log("🔑 API Key present:", !!GEMINI_API_KEY);
+    console.log("🎯 Keyword:", keyword);
+    console.log("👥 Players:", players);
+    
+    if (!GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY is not configured");
     }
 
-    // Call Lovable AI (Gemini) to analyze the drawing
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content: `You are analyzing a collaborative drawing game. The actual keyword is "${keyword}". Players are trying to draw this keyword together. Analyze the drawing and provide: 1) A subtle hint that helps without giving it away, 2) Top 3 guesses of what the drawing might be, 3) Suspicion scores (0-1) for each player indicating how suspicious their contributions are (higher = more suspicious of being the impostor).`
-          },
-          {
-            role: "user",
-            content: [
+    // Extract base64 data from data URL
+    const base64Data = imageData.split(',')[1];
+    
+    console.log("📸 Calling Gemini API for image analysis...");
+
+    // Call Google Gemini API directly
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
               {
-                type: "text",
-                text: `Analyze this drawing. Players: ${players.join(", ")}`
+                text: `You are analyzing a collaborative drawing game called "Trouble Painter". The actual keyword that players are trying to draw is: "${keyword}".
+
+Players in this game: ${players.join(", ")}
+
+Your task:
+1. Provide a subtle hint about what the drawing shows (don't reveal the keyword directly)
+2. Give your top 3 guesses of what this drawing represents
+3. Analyze each player's suspicion level (0.0 to 1.0, where 1.0 means highly suspicious of being the impostor who doesn't know the word)
+
+Respond ONLY with valid JSON in this exact format:
+{
+  "hint": "A subtle hint about the drawing",
+  "topGuesses": ["guess1", "guess2", "guess3"],
+  "suspicionScores": {
+    "${players[0]}": 0.1,
+    "${players[1]}": 0.3,
+    "${players[2]}": 0.7
+  }
+}`
               },
               {
-                type: "image_url",
-                image_url: {
-                  url: imageData
+                inline_data: {
+                  mime_type: "image/png",
+                  data: base64Data
                 }
               }
             ]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 1024,
           }
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "analyze_drawing",
-              description: "Analyze the drawing and return hints, guesses, and suspicion scores",
-              parameters: {
-                type: "object",
-                properties: {
-                  hint: { type: "string", description: "A subtle hint about the keyword" },
-                  topGuesses: {
-                    type: "array",
-                    items: { type: "string" },
-                    description: "Top 3 guesses of what the drawing represents",
-                    minItems: 3,
-                    maxItems: 3
-                  },
-                  suspicionScores: {
-                    type: "object",
-                    description: "Suspicion scores for each player (0-1, where 1 is most suspicious)",
-                    additionalProperties: { type: "number", minimum: 0, maximum: 1 }
-                  }
-                },
-                required: ["hint", "topGuesses", "suspicionScores"],
-                additionalProperties: false
-              }
-            }
-          }
-        ],
-        tool_choice: { type: "function", function: { name: "analyze_drawing" } }
-      }),
-    });
+        }),
+      }
+    );
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Gemini API Error:", response.status, errorText);
+      
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits to your workspace." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      throw new Error(`AI gateway error: ${response.status}`);
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    console.log("📊 Raw Gemini response:", JSON.stringify(data, null, 2));
     
-    if (!toolCall?.function?.arguments) {
-      throw new Error("Invalid AI response format");
+    const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!textContent) {
+      throw new Error("No text content in Gemini response");
     }
 
-    const analysis = JSON.parse(toolCall.function.arguments);
+    console.log("📝 Gemini text response:", textContent);
+
+    // Extract JSON from the response (it might be wrapped in markdown code blocks)
+    let jsonText = textContent.trim();
+    if (jsonText.startsWith('```json')) {
+      jsonText = jsonText.slice(7, -3).trim();
+    } else if (jsonText.startsWith('```')) {
+      jsonText = jsonText.slice(3, -3).trim();
+    }
+
+    const analysis = JSON.parse(jsonText);
+    
+    console.log("✅ Parsed analysis:", JSON.stringify(analysis, null, 2));
 
     return new Response(JSON.stringify(analysis), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
